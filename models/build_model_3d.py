@@ -118,7 +118,7 @@ class AutoMatching(nn.Module):
                 self.cells += [cell2]
                 self.cells += [cell3]
                 self.cells += [cell4]
-                
+
         self.last_3  = ConvBR(self._num_end, 1, 3, 1, 1,  bn=False, relu=False)  
         self.last_6  = ConvBR(self._num_end*2 , self._num_end,    1, 1, 0)  
         self.last_12 = ConvBR(self._num_end*4 , self._num_end*2,  1, 1, 0)  

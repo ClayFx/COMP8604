@@ -29,8 +29,14 @@ import numpy as np
 import pdb
 from path import Path
 
+
+
 opt = obtain_predict_args()
 print(opt)
+
+os.environ["CUDA_VISIBLE_DEVICES"] = '0,1'
+print(torch.cuda.device_count())
+
 
 torch.backends.cudnn.benchmark = True
 
@@ -44,8 +50,8 @@ model = LEAStereo(opt)
 print('Total Params = %.2fMB' % count_parameters_in_MB(model))
 print('Feature Net Params = %.2fMB' % count_parameters_in_MB(model.feature))
 print('Matching Net Params = %.2fMB' % count_parameters_in_MB(model.matching))
-   
-mult_adds = comp_multadds(model, input_size=(3,opt.crop_height, opt.crop_width)) #(3,192, 192))
+
+mult_adds = comp_multadds(model, input_size=(3,opt.crop_height, opt.crop_width), half=False) #(3,192, 192))
 print("compute_average_flops_cost = %.2fMB" % mult_adds)
 
 if cuda:
@@ -55,11 +61,23 @@ if opt.resume:
     if os.path.isfile(opt.resume):
         print("=> loading checkpoint '{}'".format(opt.resume))
         checkpoint = torch.load(opt.resume)
-        model.load_state_dict(checkpoint['state_dict'], strict=True)      
+        model.load_state_dict(checkpoint['state_dict'], strict=True)
+#         if cuda :
+#             model.load_state_dict(checkpoint['state_dict'], strict=True)      
+#         else :
+#             from collections import OrderedDict
+#             new_state_dict = OrderedDict()
+#             for k, v in checkpoint['state_dict'].items():
+#                 name = k[7:] # remove `module.`
+#                 new_state_dict[name] = v
+#                 # load params
+#                 model.load_state_dict(new_state_dict)
     else:
         print("=> no checkpoint found at '{}'".format(opt.resume))
 
+        
 turbo_colormap_data = get_color_map()
+
 
 def RGBToPyCmap(rgbdata):
     nsteps = rgbdata.shape[0]
@@ -190,21 +208,22 @@ def load_data(leftname, rightname):
     return temp_data
 
 def test_md(leftname, rightname, savename, imgname):
-
+    
     input1, input2, height, width = test_transform(load_data(leftname, rightname), opt.crop_height, opt.crop_width)
 
     input1 = Variable(input1, requires_grad = False)
     input2 = Variable(input2, requires_grad = False)
-
+    
     model.eval()
     if cuda:
         input1 = input1.cuda()
         input2 = input2.cuda()
+#     torch.cuda.empty_cache()
     torch.cuda.synchronize()
     start_time = time()
     with torch.no_grad():
         prediction = model(input1, input2)
-    torch.cuda.synchronize()
+#     torch.cuda.synchronize()
     end_time = time()
     
     print("Processing time: {:.4f}".format(end_time - start_time))
@@ -215,6 +234,7 @@ def test_md(leftname, rightname, savename, imgname):
     else:
         temp = temp[0, :, :]
     plot_disparity(imgname, temp, 192)
+    skimage.io.imsave(savename, (temp * 256).astype('uint16'))
     savepfm_path = savename.replace('.png','') 
     temp = np.flipud(temp)
 
@@ -281,6 +301,7 @@ def plot_disparity(savename, data, max_disp):
 
    
 if __name__ == "__main__":
+    
     file_path = opt.data_path
     file_list = opt.test_list
     f = open(file_list, 'r')
@@ -319,5 +340,7 @@ if __name__ == "__main__":
             img_path.makedirs_p()
             savename = opt.save_path + current_file[0: len(current_file) - 9] + ".png"
             img_name = img_path + current_file[0: len(current_file) - 9] + ".png"
+            
+#             model.to("cpu")
             test_md(leftname, rightname, savename, img_name)
-
+         

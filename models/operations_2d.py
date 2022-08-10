@@ -4,7 +4,9 @@ import torch.nn.functional as F
 
 OPS = {
     'skip_connect': lambda C, stride: Identity() if stride == 1 else FactorizedReduce(C, C),
-    'conv_3x3': lambda C, stride: ConvBR(C, C, 3, stride, 1)
+    'conv_3x3': lambda C, stride: ConvBR(C, C, 3, stride, 1),
+    'conv_5x5': lambda C, stride: ConvBR(C, C, 5, stride, 2),
+    'conv_7x7': lambda C, stride: ConvBR(C, C, 7, stride, 3)
 }
 
 class NaiveBN(nn.Module):

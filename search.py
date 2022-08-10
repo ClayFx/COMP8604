@@ -18,6 +18,7 @@ import torch.nn.functional as F
 import pdb
 from config_utils.search_args import obtain_search_args
 from models.build_model import AutoStereo
+from utils.utils import stereo_validation, to_psnr, to_ssim_skimage
 
 print('working with pytorch version {}'.format(torch.__version__))
 print('with cuda version {}'.format(torch.version.cuda))
@@ -37,7 +38,7 @@ if cuda:
 
 # default settings for epochs, batch_size and lr
 if opt.epochs is None:
-    epoches = {'sceneflow': 10}
+    epoches = {'sceneflow': 10, 'middlebury' : 10, 'kitti12' : 2}
     opt.epochs = epoches[opt.dataset.lower()]
 
 if opt.batch_size is None:
@@ -100,7 +101,7 @@ class Trainer(object):
             self.model = torch.nn.DataParallel(self.model).cuda()
 
         # Resuming checkpoint
-        self.best_pred = 100.0
+        self.best_pred = float("-inf")
         if args.resume is not None:
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'" .format(args.resume))
@@ -156,24 +157,31 @@ class Trainer(object):
         num_img_tr = len(self.train_loaderA)
 
         for i, batch in enumerate(tbar):
-            input1, input2, target = Variable(batch[0],requires_grad=True), Variable(batch[1], requires_grad=True), (batch[2])
-            if self.args.cuda:
+            input1, input2, target1, target2 = Variable(batch[0],requires_grad=True), Variable(batch[1], requires_grad=True), \
+                                                 (batch[2]), (batch[3]) 
+            if cuda:
                 input1 = input1.cuda()
                 input2 = input2.cuda()
-                target = target.cuda()
+                target1 = target1.cuda()
+                target2 = target2.cuda()
+            
+            target = torch.cat((target1, target2), dim=1)
+            target = torch.squeeze(target, 1)
 
-            target=torch.squeeze(target,1)
-            mask = target < self.args.max_disp
-            mask.detach_()
-            valid = target[mask].size()[0]
-            if valid > 0:
+            # mask = target < self.args.max_disp
+            # mask.detach_()
+            # valid = target[mask].size()[0]
+            if True:
                 self.scheduler(self.optimizer_F, i, epoch, self.best_pred)
                 self.scheduler(self.optimizer_M, i, epoch, self.best_pred)
                 self.optimizer_F.zero_grad()
                 self.optimizer_M.zero_grad()
             
                 output = self.model(input1, input2) 
-                loss = F.smooth_l1_loss(output[mask], target[mask], reduction='mean')
+                output1, output2 = output[:,0:3,:,:], output[:,3:,:,:]
+                # print(output.size(), target.size())
+                # TODO -- change l1 loss to l2 loss
+                loss = F.mse_loss(output1, target1, reduction='mean') + F.mse_loss(output2, target2, reduction='mean')
                 loss.backward()            
                 self.optimizer_F.step()     
                 self.optimizer_M.step()   
@@ -181,20 +189,27 @@ class Trainer(object):
                 if epoch >= self.args.alpha_epoch:
                     print("Start searching architecture!...........")
                     search = next(iter(self.train_loaderB))
-                    input1_search, input2_search, target_search = Variable(search[0],requires_grad=True), Variable(search[1], requires_grad=True), (search[2])
+                    input1_search, input2_search, target1_search, target2_search = Variable(search[0],requires_grad=True), \
+                                                                Variable(search[1], requires_grad=True), (search[2]), (search[3])
                     if self.args.cuda:
                         input1_search = input1_search.cuda()
                         input2_search = input2_search.cuda()
-                        target_search = target_search.cuda()
+                        target1_search = target1_search.cuda()
+                        target2_search = target2_search.cuda()
 
+                    target_search=torch.cat((target1_search, target2_search), dim=1)
                     target_search=torch.squeeze(target_search,1)
-                    mask_search = target_search < self.args.max_disp
-                    mask_search.detach_()
+
+                    # mask_search = target_search < self.args.max_disp
+                    # mask_search.detach_()
 
                     self.architect_optimizer_F.zero_grad()
                     self.architect_optimizer_M.zero_grad()
                     output_search = self.model(input1_search, input2_search)
-                    arch_loss = F.smooth_l1_loss(output_search[mask_search], target_search[mask_search], reduction='mean')
+                    output_search1, output_search2 = output_search[:,0:3,:,:], output_search[:,3:,:,:]
+
+                    arch_loss = F.mse_loss(output_search1, target1_search, reduction='mean') + \
+                            F.mse_loss(output_search2, target2_search, reduction='mean')
 
                     arch_loss.backward()            
                     self.architect_optimizer_F.step() 
@@ -208,7 +223,7 @@ class Trainer(object):
             #Show 10 * 3 inference results each epoch
             if i % (num_img_tr // 10) == 0:
                 global_step = i + num_img_tr * epoch
-                self.summary.visualize_image_stereo(self.writer, input1, target, output, global_step)
+                self.summary.visualize_image_stereo(self.writer, input1, input2, target, output, global_step)
 
         self.writer.add_scalar('train/total_loss_epoch', train_loss, epoch)
         print("=== Train ===> Epoch :{} Error: {:.4f}".format(epoch, train_loss/valid_iteration))
@@ -220,6 +235,7 @@ class Trainer(object):
            state_dict = self.model.module.state_dict()
         else:
            state_dict = self.model.state_dict()
+
         self.saver.save_checkpoint({
                'epoch': epoch + 1,
                'state_dict': state_dict,
@@ -238,48 +254,78 @@ class Trainer(object):
         tbar = tqdm(self.val_loader, desc='\r')
         test_loss = 0.0
 
+        psnr_list = []
+        ssim_list = []
+        psnr_list2 = []
+        ssim_list2 = []
+
         for i, batch in enumerate(tbar):
-            input1, input2, target = Variable(batch[0],requires_grad=False), Variable(batch[1], requires_grad=False), Variable(batch[2], requires_grad=False)
+            input1, input2, target1, target2 = Variable(batch[0],requires_grad=False), Variable(batch[1], requires_grad=False),\
+                                     Variable(batch[2], requires_grad=False), Variable(batch[3], requires_grad=False)
             if self.args.cuda:
                 input1 = input1.cuda()
                 input2 = input2.cuda()
-                target = target.cuda()
+                target1 = target1.cuda()
+                target2 = target2.cuda()
+                
+            
+            target = torch.cat((target1, target2), dim=1)
+            target = torch.squeeze(target, 1)
 
-            target=torch.squeeze(target,1)
-            mask = target < self.args.max_disp
-            mask.detach_()
-            valid = target[mask].size()[0]
+            # mask = target < self.args.max_disp
+            # mask.detach_()
+            # valid = target[mask].size()[0]
 
-            if valid>0:
+            # if valid>0:
+            if True:
                 with torch.no_grad():
                     output = self.model(input1, input2)
 
-                    error = torch.mean(torch.abs(output[mask] - target[mask]))
+                    output1, output2 = output[:,0:3,:,:], output[:,3:,:,:]
+                    error = torch.mean(torch.abs(output1 - target1)) + torch.mean(torch.abs(output2 - target2))
                     epoch_error += error.item()
 
                     valid_iteration += 1
 
                     #computing 3-px error#                
-                    pred_disp = output.cpu().detach()                                                                                                                          
-                    true_disp = target.cpu().detach()
-                    disp_true = true_disp
-                    index = np.argwhere(true_disp<opt.max_disp)
-                    disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
-                    correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 1)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*0.05)      
-                    three_px_acc = 1-(float(torch.sum(correct))/float(len(index[0])))
+                    # pred_disp = output.cpu().detach()                                                                                                                          
+                    # true_disp = target.cpu().detach()
+                    # disp_true = true_disp
+                    # index = np.argwhere(true_disp<opt.max_disp)
+                    # disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
+                    # correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 1)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*0.05)      
+                    # three_px_acc = 1-(float(torch.sum(correct))/float(len(index[0])))
 
-                    three_px_acc_all += three_px_acc
-                    print("===> Test({}/{}): Error(EPE): ({:.4f} {:.4f})".format(i, len(self.val_loader), error.item(),three_px_acc))
+                    # three_px_acc_all += three_px_acc
+
+                    this_psnr1 = to_psnr(output1, target1)
+                    this_ssim1 = to_ssim_skimage(output1, target1)
+                    this_psnr2 = to_psnr(output2, target2)
+                    this_ssim2 = to_ssim_skimage(output2, target2)
+
+                    psnr_list.append(this_psnr1)
+                    ssim_list.append(this_ssim1)
+                    psnr_list2.append(this_psnr2)
+                    ssim_list2.append(this_ssim2)
+
+                    this_psnr = (np.mean(this_psnr1) + np.mean(this_psnr2)) / 2 
+                    this_ssim = (np.mean(this_ssim1) + np.mean(this_ssim2)) / 2 
+
+                    print("===> Test({}/{}): Error(EPE, psnr, ssim): ({:.4f} {:.4f} {:.4f})".format(i, len(self.val_loader), error.item(), this_psnr, this_ssim))
 
         self.writer.add_scalar('val/EPE', epoch_error/valid_iteration, epoch)
-        self.writer.add_scalar('val/D1_all', three_px_acc_all/valid_iteration, epoch)
+        self.writer.add_scalar('val/psnr', three_px_acc_all/valid_iteration, epoch)
+        self.writer.add_scalar('val/ssim', three_px_acc_all/valid_iteration, epoch)
 
-        print("===> Test: Avg. Error: ({:.4f} {:.4f})".format(epoch_error/valid_iteration, three_px_acc_all/valid_iteration))
+
+        avg_psnr = (np.mean(psnr_list) + np.mean(psnr_list2)) / 2
+        avg_ssim = (np.mean(ssim_list) + np.mean(ssim_list2)) / 2
+        print("===> Test: Avg. Error(EPE, psnr, ssim): ({:.4f} {:.4f} {:.4f})".format(epoch_error/valid_iteration, avg_psnr, avg_ssim))
 
 
         # save model
-        new_pred = epoch_error/valid_iteration # three_px_acc_all/valid_iteration
-        if new_pred < self.best_pred: 
+        new_pred = avg_psnr
+        if new_pred > self.best_pred: 
             is_best = True
             self.best_pred = new_pred
             if torch.cuda.device_count() > 1:

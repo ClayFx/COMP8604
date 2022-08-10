@@ -9,7 +9,7 @@ class Saver(object):
 
     def __init__(self, args):
         self.args = args
-        self.directory = os.path.join('run', args.dataset)
+        self.directory = os.path.join('run', 'deraining', args.dataset)
         self.runs = sorted(glob.glob(os.path.join(self.directory, 'experiment_*')))
         run_id = max([int(x.split('_')[-1]) for x in self.runs]) + 1 if self.runs else 0
 

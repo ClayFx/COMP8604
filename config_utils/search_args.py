@@ -3,9 +3,9 @@ import argparse
 def obtain_search_args():
     parser = argparse.ArgumentParser(description="LEStereo Searching...")
     parser.add_argument('--clean-module', type=int, default=0)
-    parser.add_argument('--dataset', type=str, default='sceneflow',
+    parser.add_argument('--dataset', type=str, default='kitti12',
                         choices=['sceneflow', 'kitti15', 'kitti12', 'middlebury'],
-                        help='dataset name (default: sceneflow)')
+                        help='dataset name (default: kitti12)')
     parser.add_argument('--stage', type=str, default='search',
                         choices=['search', 'train'])
     parser.add_argument('--fea_num_layers', type=int, default=6)

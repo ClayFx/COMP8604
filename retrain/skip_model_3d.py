@@ -92,6 +92,7 @@ class newMatching(nn.Module):
         self.stem1 = ConvBR(initial_fm, initial_fm, 3, stride=1, padding=1)
 
         filter_param_dict = {0: 1, 1: 2, 2: 4, 3: 8}
+        # filter_param_dict = {1: 1, 2: 2, 3: 4, 4: 8}
         for i in range(self._num_layers):
             level_option = torch.sum(self.network_arch[i], dim=1)
             prev_level_option = torch.sum(self.network_arch[i - 1], dim=1)
@@ -110,6 +111,7 @@ class newMatching(nn.Module):
             else:
                 three_branch_options = torch.sum(self.network_arch[i], dim=0)
                 downup_sample = torch.argmax(three_branch_options).item() - 1
+                # print(downup_sample)
                 if i == 1:
                     _cell = cell(self._step, self._block_multiplier,
                                  initial_fm / self._block_multiplier,
@@ -144,8 +146,15 @@ class newMatching(nn.Module):
         out2 = self.cells[2](out1[0], out1[1])
         out3 = self.cells[3](out2[0], out2[1])
         out4 = self.cells[4](out3[0], out3[1])
-
-        out4_cat = self.conv1(torch.cat((out1[-1], out4[-1]), 1)) 
+        # print(len(self.cells), self.cells[0], out1[-1].size(), out4[-1].size())
+        # print(self.cells[0], self.cells[1], self.cells[2], self.cells[3],self.cells[4])
+        # return
+        if out1[-1].size()[2]!=out4[-1].size()[2] or out1[-1].size()[3]!=out4[-1].size()[3] or out1[-1].size()[4]!=out4[-1].size()[4]:
+            out4_interpolate = F.interpolate(out4[-1], [out1[-1].size()[2], out1[-1].size()[3], out1[-1].size()[4]], mode='trilinear', align_corners=True)
+        else: 
+            out4_interpolate = out4[-1]
+        print(out1[-1].size(), out4[-1].size(), out4_interpolate.size())
+        out4_cat = self.conv1(torch.cat((out1[-1], out4_interpolate), 1)) 
         out5 = self.cells[5](out4[0], out4_cat)
         out6 = self.cells[6](out5[0], out5[1])
         out7 = self.cells[7](out6[0], out6[1])

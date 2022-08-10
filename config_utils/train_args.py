@@ -10,7 +10,7 @@ def obtain_train_args():
                         help="crop height")
     parser.add_argument('--crop_width', type=int, required=True, 
                         help="crop width")
-    parser.add_argument('--resume', type=str, default='', 
+    parser.add_argument('--resume', type=str, default=None, 
                         help="resume from saved model")
     parser.add_argument('--batch_size', type=int, default=1, 
                         help='training batch size')

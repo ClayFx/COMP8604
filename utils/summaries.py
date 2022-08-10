@@ -42,8 +42,15 @@ class TensorboardSummary(object):
             array = 0.5 + tensor.numpy().transpose(1, 2, 0)*0.5
         return array
 
-    def visualize_image_stereo(self, writer, image, target, output, global_step):
-        pr_image = self.tensor2array(output[0].cpu().data, max_value=144, colormap='bone')
-        writer.add_image('Predicted disparity', pr_image, global_step)
-        gt_image = self.tensor2array(target[0].cpu().data, max_value=144, colormap='bone')
-        writer.add_image('Groundtruth disparity', gt_image, global_step)
+    def visualize_image_stereo(self, writer, input1, input2, target, output, global_step):
+        # print(target.size(), output.size())
+        writer.add_image('input_1', input1[0], global_step, dataformats='CHW')
+        writer.add_image('input_2', input2[0], global_step, dataformats='CHW')
+
+        output_1, output_2 = output[0,0:3,:,:], output[0,3:,:,:]
+        writer.add_image('Predicted_1', output_1, global_step, dataformats='CHW')
+        writer.add_image('Predicted_2', output_2, global_step, dataformats='CHW')
+        
+        target_1, target_2 = target[0,0:3,:,:], target[0,3:,:,:]
+        writer.add_image('Groundtruth_1', target_1, global_step, dataformats='CHW')
+        writer.add_image('Groundtruth_2', target_2, global_step, dataformats='CHW')

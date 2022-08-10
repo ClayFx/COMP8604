@@ -15,13 +15,13 @@ class Loader(object):
 
         checkpoint = torch.load(args.resume)
         args.start_epoch = checkpoint['epoch']
-
-        self._alphas_fea = checkpoint['state_dict']['feature.alphas']
-        self._betas_fea  = checkpoint['state_dict']['feature.betas']
+        # print(checkpoint['state_dict'].keys())
+        self._alphas_fea = checkpoint['state_dict']['module.feature.alphas']
+        self._betas_fea  = checkpoint['state_dict']['module.feature.betas']
         self.decoder_fea = Decoder(alphas=self._alphas_fea, betas=self._betas_fea, steps=self.args.step)
 
-        self._alphas_mat = checkpoint['state_dict']['matching.alphas']
-        self._betas_mat  = checkpoint['state_dict']['matching.betas']
+        self._alphas_mat = checkpoint['state_dict']['module.matching.alphas']
+        self._betas_mat  = checkpoint['state_dict']['module.matching.betas']
         self.decoder_mat = Decoder(alphas=self._alphas_mat, betas=self._betas_mat, steps=self.args.step)
 
     def retreive_alphas_betas(self):

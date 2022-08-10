@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.build_model_2d import AutoFeature, Disp
+from models.build_model_2d import AutoFeature, Disp, DispDerain
 from models.build_model_3d import AutoMatching
 import pdb
 from time import time
 
 class AutoStereo(nn.Module):
-    def __init__(self, maxdisp=192, Fea_Layers=6, Fea_Filter=8, Fea_Block=4, Fea_Step=3, Mat_Layers=12, Mat_Filter=8, Mat_Block=4, Mat_Step=3):
+    def __init__(self, maxdisp=256, Fea_Layers=6, Fea_Filter=8, Fea_Block=4, Fea_Step=3, Mat_Layers=12, Mat_Filter=8, Mat_Block=4, Mat_Step=3):
         super(AutoStereo, self).__init__()
         self.maxdisp = maxdisp
         #define Feature parameters
@@ -23,7 +23,8 @@ class AutoStereo(nn.Module):
 
         self.feature  = AutoFeature(self.Fea_Layers, self.Fea_Filter, self.Fea_Block, self.Fea_Step)
         self.matching = AutoMatching(self.Mat_Layers, self.Mat_Filter, self.Mat_Block, self.Mat_Step)
-        self.disp = Disp(self.maxdisp)
+        # self.disp = Disp(self.maxdisp)
+        self.disp = DispDerain(self.maxdisp)
 
         for m in self.modules():
             if isinstance(m, (nn.Conv2d)):

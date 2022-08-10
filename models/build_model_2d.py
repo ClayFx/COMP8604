@@ -22,15 +22,19 @@ class DispEntropy(nn.Module):
         return x
 
 class DisparityRegression(nn.Module):
-    def __init__(self, maxdisp):
+    def __init__(self, maxdisp=256):
         super(DisparityRegression, self).__init__()
         self.maxdisp = maxdisp
 
     def forward(self, x):
         assert(x.is_contiguous() == True)
         with torch.cuda.device_of(x):
+            # TODO
             disp = torch.reshape(torch.arange(0, self.maxdisp, device=torch.cuda.current_device(), dtype=torch.float32),[1,self.maxdisp,1,1])
+#             disp = torch.reshape(torch.arange(0, self.maxdisp, device="cpu", dtype=torch.float32),[1,self.maxdisp,1,1])
             disp = disp.repeat(x.size()[0], 1, x.size()[2], x.size()[3])
+#             print(disp.device)
+#             print(x.device)
             out = torch.sum(x * disp, 1)
         return out
 
@@ -47,6 +51,43 @@ class Disp(nn.Module):
         x = self.softmax(x)      
         x = self.disparity(x)
         return x
+
+# TODO--Disp for two derained images instead of disparity
+class DispDerain(nn.Module):
+    def __init__(self, maxdisp=256):
+        super(DispDerain, self).__init__()
+        # self.maxdisp = maxdisp
+        self.softmax = nn.Softmin(dim=1)
+        self.c_out = 6
+        # self.derain = nn.Conv2d(64, self.c_out, 3, stride=1, padding=1, bias=False)
+
+        self.colorReg1 =  DisparityRegression(maxdisp=256)
+        self.colorReg2 =  DisparityRegression(maxdisp=256)
+        self.colorReg3 =  DisparityRegression(maxdisp=256)
+        self.colorReg4 =  DisparityRegression(maxdisp=256)
+        self.colorReg5 =  DisparityRegression(maxdisp=256)
+        self.colorReg6 =  DisparityRegression(maxdisp=256)
+        
+
+    def forward(self, x):
+        # print(x.size()) # [1, 1, 64, 80, 80]
+        x = F.interpolate(x, [256, x.size()[3]*3, x.size()[4]*3], mode='trilinear', align_corners=False)
+        # print(x.size()) 
+        x = torch.squeeze(x, 1)
+        x = self.softmax(x) 
+        # out = self.derain(x)
+        # print(torch.min(out), torch.max(out))
+        # print(out.size())
+        out1 = self.colorReg1(x).unsqueeze(1)
+        out2 = self.colorReg2(x).unsqueeze(1)
+        out3 = self.colorReg3(x).unsqueeze(1)
+        out4 = self.colorReg4(x).unsqueeze(1)
+        out5 = self.colorReg5(x).unsqueeze(1)
+        out6 = self.colorReg6(x).unsqueeze(1)
+        out = torch.cat((out1, out2, out3, out4, out5, out6), dim=1)
+        # print(torch.min(out), torch.max(out))
+        # print(out.size())
+        return out
 
 
 class AutoFeature(nn.Module):

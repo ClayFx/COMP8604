@@ -3,10 +3,10 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.build_model_2d import Disp
+from models.build_model_2d import Disp, DispDerain
 from models.decoding_formulas import network_layer_to_space
 from retrain.new_model_2d import newFeature
-from retrain.skip_model_3d import newMatching
+from retrain.new_model_3d import newMatching
 
 class LEAStereo(nn.Module):
     def __init__(self, args):
@@ -22,7 +22,8 @@ class LEAStereo(nn.Module):
         self.maxdisp = args.maxdisp
         self.feature = newFeature(network_arch_fea, cell_arch_fea, args=args)
         self.matching= newMatching(network_arch_mat, cell_arch_mat, args=args) 
-        self.disp = Disp(self.maxdisp)
+        # self.disp = Disp(self.maxdisp)
+        self.disp = DispDerain(self.maxdisp)
 
     def forward(self, x, y):
         x = self.feature(x)       
@@ -30,6 +31,7 @@ class LEAStereo(nn.Module):
 
         with torch.cuda.device_of(x):
             cost = x.new().resize_(x.size()[0], x.size()[1]*2, int(self.maxdisp/3),  x.size()[2],  x.size()[3]).zero_() 
+        
         for i in range(int(self.maxdisp/3)):
             if i > 0 : 
                 cost[:,:x.size()[1], i,:,i:] = x[:,:,:,i:]
