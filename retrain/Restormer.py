@@ -10,7 +10,7 @@ from pdb import set_trace as stx
 import numbers
 
 from einops import rearrange
-
+from network_vrt import SpyNet
 
 
 ##########################################################################
@@ -296,10 +296,13 @@ class StereoRestormer(nn.Module):
         ffn_expansion_factor = 2.66,
         bias = False,
         LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
-        dual_pixel_task = False        ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+        dual_pixel_task = False,        ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+        spynet_path = None
     ):
 
         super(StereoRestormer, self).__init__()
+
+        inp_channels = inp_channels*(1+2*4)
 
         self.patch_embed = OverlapPatchEmbed(inp_channels, dim)
 
@@ -337,7 +340,10 @@ class StereoRestormer(nn.Module):
             
         self.output = nn.Conv2d(int(dim*2**1), out_channels, kernel_size=3, stride=1, padding=1, bias=bias)
 
-    def forward(self, inp_img):
+        self.spynet = SpyNet(spynet_path, [2, 3, 4, 5])
+
+
+    def forward_features(self, inp_img, img_lq):
 
         inp_enc_level1 = self.patch_embed(inp_img)
         out_enc_level1 = self.encoder_level1(inp_enc_level1)
@@ -373,22 +379,29 @@ class StereoRestormer(nn.Module):
             out_dec_level1 = self.output(out_dec_level1)
         ###########################
         else:
-            out_dec_level1 = self.output(out_dec_level1) + inp_img
+            out_dec_level1 = self.output(out_dec_level1) + img_lq
 
 
         return out_dec_level1
 
-    def get_flow_2frames(self, x):
+    def get_flows(self, x):
         '''Get flow between frames t and t+1 from x.'''
 
         b, n, c, h, w = x.size()
         x_1 = x[:, :-1, :, :, :].reshape(-1, c, h, w)
         x_2 = x[:, 1:, :, :, :].reshape(-1, c, h, w)
 
+        # b, c, h, w = x.size()
+        # n = 2
+        # x_1 = x[:, 0:3, :, :]
+        # x_2 = x[:, 3:, :, :]
+
         # backward
         flows_backward = self.spynet(x_1, x_2)
+        # print(flows_backward[0].size())
         flows_backward = [flow.view(b, n-1, 2, h // (2 ** i), w // (2 ** i)) for flow, i in
                           zip(flows_backward, range(4))]
+        # print(flows_backward[0].size())
 
         # forward
         flows_forward = self.spynet(x_2, x_1)
@@ -417,27 +430,56 @@ class StereoRestormer(nn.Module):
 
         return [torch.stack(x_backward, 1), torch.stack(x_forward, 1)]
 
-    def forward_vrt(self, x):
-        # x: (N, D, C, H, W)
+    def forward(self, x):
+        # x: (B, C, H, W)
 
         # main network
-        if self.pa_frames:
-            x_lq = x.clone()
+        x_lq = x.clone()
 
-            # calculate flows
-            flows_backward, flows_forward = self.get_flows(x)
+        x_1 = x[:, 0:3, :, :].unsqueeze(1)
+        x_2 = x[:, 3:, :, :].unsqueeze(1)
+        x2flows = torch.cat([x_1, x_2], 1)
 
-            # warp input
-            x_backward, x_forward = self.get_aligned_image_2frames(x,  flows_backward[0], flows_forward[0])
-            x = torch.cat([x, x_backward, x_forward], 2)
 
-            if self.upscale == 1:
-                # video deblurring, etc.
-                x = self.conv_first(x.transpose(1, 2))
-                x = x + self.conv_after_body(
-                    self.forward_features(x, flows_backward, flows_forward).transpose(1, 4)).transpose(1, 4)
-                x = self.conv_last(x).transpose(1, 2)
-                return x + x_lq
+        # calculate flows
+        flows_backward, flows_forward = self.get_flows(x2flows)
+
+        # warp input
+        x_backward, x_forward = self.get_aligned_image_2frames(x2flows,  flows_backward[0], flows_forward[0])
+
+        
+        x_backward = torch.cat([x_backward[:, 0, :, :, :].squeeze(1), x_backward[:, 1, :, :, :].squeeze(1)], 1)
+        x_forward = torch.cat([x_forward[:, 0, :, :, :].squeeze(1), x_forward[:, 1, :, :, :].squeeze(1)], 1)
+        x = torch.cat([x, x_backward, x_forward], 1)
+
+        x = self.forward_features(x, x_lq)
+        # x = self.conv_first(x.transpose(1, 2))
+        # x = x + self.conv_after_body(
+        #     self.forward_features(x, flows_backward, flows_forward).transpose(1, 4)).transpose(1, 4)
+        # x = self.conv_last(x).transpose(1, 2)
+        return x
+
+    # def forward_vrt(self, x):
+    #     # x: (N, D, C, H, W)
+
+    #     # main network
+    #     if self.pa_frames:
+    #         x_lq = x.clone()
+
+    #         # calculate flows
+    #         flows_backward, flows_forward = self.get_flows(x)
+
+    #         # warp input
+    #         x_backward, x_forward = self.get_aligned_image_2frames(x,  flows_backward[0], flows_forward[0])
+    #         x = torch.cat([x, x_backward, x_forward], 2)
+
+    #         if self.upscale == 1:
+    #             # video deblurring, etc.
+    #             x = self.conv_first(x.transpose(1, 2))
+    #             x = x + self.conv_after_body(
+    #                 self.forward_features(x, flows_backward, flows_forward).transpose(1, 4)).transpose(1, 4)
+    #             x = self.conv_last(x).transpose(1, 2)
+    #             return x + x_lq
 
 def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corners=True, use_pad_mask=False):
     """Warp an image or feature map with optical flow.
@@ -496,3 +538,30 @@ def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corne
 
         # TODO, what if align_corners=False
         return output
+
+if __name__ == '__main__':
+    # device = torch.device('cpu')
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    upscale = 4
+    window_size = 8
+    height = (256 // upscale // window_size) * window_size
+    width = (256 // upscale // window_size) * window_size
+
+    model = StereoRestormer(inp_channels=6, 
+                            out_channels=6, 
+                            dim = 48,
+                            num_blocks = [4,6,6,8], 
+                            num_refinement_blocks = 4,
+                            heads = [1,2,4,8],
+                            ffn_expansion_factor = 2.66,
+                            bias = False,
+                            LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
+                            dual_pixel_task = False,        ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+                            spynet_path='/home/featurize/work/LEAStereo/retrain/pretrain/spynet.pth'
+                        ).to(device)
+    print(model)
+    print('{:>16s} : {:<.4f} [M]'.format('#Params', sum(map(lambda x: x.numel(), model.parameters())) / 10 ** 6))
+
+    x = torch.randn((2, 6, height, width)).to(device)
+    x = model(x)
+    print(x.shape)

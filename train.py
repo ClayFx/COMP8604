@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from time import time
 from collections import OrderedDict
 # from retrain.LEAStereo import LEAStereo
-from retrain.Restormer import StereoRestormer
+from retrain.Restormer import StereoRestormer, Restormer
 
 from mypath import Path
 from dataloaders import make_data_loader
@@ -48,8 +48,7 @@ kwargs = {'num_workers': opt.threads, 'pin_memory': True, 'drop_last':True}
 training_data_loader, testing_data_loader = make_data_loader(opt, **kwargs)
 
 print('===> Building model')
-# model = LEAStereo(opt)
-model = StereoRestormer(inp_channels=6, 
+model = Restormer(inp_channels=6, 
         out_channels=6, 
         dim = 48,
         num_blocks = [4,6,6,8], 
@@ -59,6 +58,17 @@ model = StereoRestormer(inp_channels=6,
         bias = False,
         LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
         dual_pixel_task = False)       ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+
+# model = StereoRestormer(inp_channels=6, 
+#         out_channels=6, 
+#         dim = 48,
+#         num_blocks = [4,6,6,8], 
+#         num_refinement_blocks = 4,
+#         heads = [1,2,4,8],
+#         ffn_expansion_factor = 2.66,
+#         bias = False,
+#         LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
+#         dual_pixel_task = False)       ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
 
 writer = SummaryWriter(opt.save_path) 
 
