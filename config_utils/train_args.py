@@ -4,7 +4,7 @@ def obtain_train_args():
 
     # Training settings
     parser = argparse.ArgumentParser(description='LEStereo training...')
-    parser.add_argument('--maxdisp', type=int, default=192, 
+    parser.add_argument('--maxdisp', type=int, default=256, 
                         help="max disp")
     parser.add_argument('--crop_height', type=int, required=True, 
                         help="crop height")
@@ -38,19 +38,19 @@ def obtain_train_args():
     parser.add_argument('--dataset', type=str, default='sceneflow', 
                         choices=['sceneflow', 'kitti15', 'kitti12', 'middlebury'], help='dataset name')
 
-    ######### LEStereo params ##################
-    parser.add_argument('--fea_num_layers', type=int, default=6)
-    parser.add_argument('--mat_num_layers', type=int, default=12)
-    parser.add_argument('--fea_filter_multiplier', type=int, default=8)
-    parser.add_argument('--mat_filter_multiplier', type=int, default=8)
-    parser.add_argument('--fea_block_multiplier', type=int, default=4)
-    parser.add_argument('--mat_block_multiplier', type=int, default=4)
-    parser.add_argument('--fea_step', type=int, default=2)
-    parser.add_argument('--mat_step', type=int, default=2)
-    parser.add_argument('--net_arch_fea', default=None, type=str)
-    parser.add_argument('--cell_arch_fea', default=None, type=str)
-    parser.add_argument('--net_arch_mat', default=None, type=str)
-    parser.add_argument('--cell_arch_mat', default=None, type=str)
+    # ######### LEStereo params ##################
+    # parser.add_argument('--fea_num_layers', type=int, default=6)
+    # parser.add_argument('--mat_num_layers', type=int, default=12)
+    # parser.add_argument('--fea_filter_multiplier', type=int, default=8)
+    # parser.add_argument('--mat_filter_multiplier', type=int, default=8)
+    # parser.add_argument('--fea_block_multiplier', type=int, default=4)
+    # parser.add_argument('--mat_block_multiplier', type=int, default=4)
+    # parser.add_argument('--fea_step', type=int, default=2)
+    # parser.add_argument('--mat_step', type=int, default=2)
+    # parser.add_argument('--net_arch_fea', default=None, type=str)
+    # parser.add_argument('--cell_arch_fea', default=None, type=str)
+    # parser.add_argument('--net_arch_mat', default=None, type=str)
+    # parser.add_argument('--cell_arch_mat', default=None, type=str)
 
     args = parser.parse_args()
     return args

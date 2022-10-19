@@ -12,17 +12,14 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
 import torch.nn.functional as F
-import skimage
 import pdb
 import numpy as np
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from time import time
 from collections import OrderedDict
-# from retrain.LEAStereo import LEAStereo
 from retrain.Restormer import StereoRestormer, Restormer
 
-from mypath import Path
 from dataloaders import make_data_loader
 from utils.multadds_count import count_parameters_in_MB, comp_multadds, comp_multadds_fw
 from config_utils.train_args import obtain_train_args
@@ -48,18 +45,7 @@ kwargs = {'num_workers': opt.threads, 'pin_memory': True, 'drop_last':True}
 training_data_loader, testing_data_loader = make_data_loader(opt, **kwargs)
 
 print('===> Building model')
-model = Restormer(inp_channels=6, 
-        out_channels=6, 
-        dim = 48,
-        num_blocks = [4,6,6,8], 
-        num_refinement_blocks = 4,
-        heads = [1,2,4,8],
-        ffn_expansion_factor = 2.66,
-        bias = False,
-        LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
-        dual_pixel_task = False)       ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
-
-# model = StereoRestormer(inp_channels=6, 
+# model = Restormer(inp_channels=6, 
 #         out_channels=6, 
 #         dim = 48,
 #         num_blocks = [4,6,6,8], 
@@ -69,6 +55,17 @@ model = Restormer(inp_channels=6,
 #         bias = False,
 #         LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
 #         dual_pixel_task = False)       ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+
+model = StereoRestormer(inp_channels=6, 
+        out_channels=6, 
+        dim = 48,
+        num_blocks = [4,6,6,8], 
+        num_refinement_blocks = 4,
+        heads = [1,2,4,8],
+        ffn_expansion_factor = 2.66,
+        bias = False,
+        LayerNorm_type = 'WithBias',   ## Other option 'BiasFree'
+        dual_pixel_task = False)       ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
 
 writer = SummaryWriter(opt.save_path) 
 
@@ -235,7 +232,7 @@ if __name__ == '__main__':
 
     error=float("-inf")
     for epoch in range(opt.start_epoch, opt.nEpochs):
-        # train(epoch)
+        train(epoch)
         is_best = False
         # loss=val()
         psnr1, ssim1, psnr2, ssim2 = stereo_validation(model, testing_data_loader) 

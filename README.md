@@ -1,113 +1,51 @@
-## LEAStereo
+# Stereo Image Deraining with An Image Restoring Transformer
 
-This repository contains the code for our NeurIPS 2020 paper `Hierarchical Neural Architecture Searchfor Deep Stereo Matching` [[NeurIPS 20](https://proceedings.neurips.cc/paper/2020/file/fc146be0b230d7e0a92e66a6114b840d-Paper.pdf)] 
+![alt text](./demo/pipeline.png)
 
-![alt text](./LEStereo.png)
+## Prerequisites
+- Python >= 3.8  
+- [Pytorch](https://pytorch.org/) >= 1.10  
+- Torchvision >= 0.7  
+- CUDA >= 11.2
 
-## Requirements
-
-### Environment
-
-1. Python 3.8.*
-2. CUDA 10.0
-3. PyTorch 
-4. TorchVision 
-
-### Install
-Create a  virtual environment and activate it.
-```shell
-conda create -n leastereo python=3.8
-conda activate leastereo
-```
-The code has been tested with PyTorch 1.6 and Cuda 10.2.
-```shell
-conda install pytorch=1.6.0 torchvision=0.7.0 cudatoolkit=10.2 -c pytorch
-conda install matplotlib path.py tqdm
-conda install tensorboard tensorboardX
-conda install scipy scikit-image opencv
-```
-
-Install Nvidia Apex
+## Introduction
+- ```train.py``` is the codes for training the model.
+- ```config_utils``` and ```utils``` contain the useful auxiliary functions.
+- ```retrain``` defines the model structures.
+- ```dataloaders``` contains modules which are used to load the training and validation/testing datasets.
+- ```demo``` contains how you can test with the model.
 
 
-Follow the instructions [here](https://github.com/NVIDIA/apex#quick-start). Apex is required for mixed precision training. 
-Please do not use pip install apex - this will not install the correct package.
+## Quick Start
 
-### Dataset
-To evaluate/train our LEAStereo network, you will need to download the required datasets.
+Ready the K12, K15 dataset
 
-* [SceneFlow](https://lmb.informatik.uni-freiburg.de/resources/datasets/SceneFlowDatasets.en.html)
+ - The training and testing datasets can be found (https://pan.baidu.com/s/1T2UplwARbLS5apIQiAnEXg
+) (password : zzkd).
 
-* [KITTI2015](http://www.cvlibs.net/datasets/kitti/eval_scene_flow.php?benchmark=stereo)
+Ready the pretrain model
+ - The pretrain model could be found (https://drive.google.com/drive/folders/1W6Ib6zWzaIuJBrfLaUIx00xC0CSgqtl1?usp=sharing)
+ - Put the retrain model with the following folder
+    ```
+    ├── retrain
+        └── pretrain
+    ```
 
-* [KITTI2012](http://www.cvlibs.net/datasets/kitti/eval_stereo_flow.php?benchmark=stereo)
-
-* [Middlebury 2014](https://vision.middlebury.edu/stereo/submit3/)
-
-Change the first column path in file `create_link.sh` with your actual dataset location. Then run `create_link.sh` that will create symbolic links to wherever the datasets were downloaded in the `datasets` folder. For Middlebury 2014 dataset, we perform our network on half resolution images.
 
 
-```Shell
-├── datasets
-    ├── SceneFlow
-        ├── camera_data
-        ├── disparity
-        ├── frames_finalpass
-    ├── kitti2012
-        ├── testing
-        ├── training
-    ├── kitti2015
-        ├── testing
-        ├── training
-    ├── MiddEval3
-        ├── testH
-        ├── trainingH
+If you want to retrain the model, you can train the model by running the command below after setting the dataset path in ```dataloaders/__init__.py``` and config in ```train.sh```.
+
+```bash
+sh train.sh
 ```
 
-### Prediction
 
-You can evaluate a trained model using `prediction.sh` for each dataset, that would help you generate *.png or *.pfm images correspoding to different datasets.
-```shell
-sh predict_sf.sh
-sh predict_md.sh
-sh predict_kitti12.sh
-sh predict_kitti15.sh
-```
-Results of our model on three benchmark datasets could also be found [here](https://drive.google.com/file/d/1Wcv-WzQToTwAiBfWpONrtyQSgsHrWqWC/view?usp=sharing) 
+## Training detail
+#### Stereo :
+   - K12 batch_size=4 epoch=20 learn_rate=0.001
+   - K15 batch_size=4 epoch=20 learn_rate=0.001
 
 
-### Architecture Search 
-Three steps for the architecture search: 
 
-#### 1. Search 
-```shell
-sh search.sh
-```
-#### 2. decode 
-```shell
-sh decode.sh
-```
-#### 3. retrain 
-```shell
-sh train_sf.sh
-sh train_md.sh
-sh train_kitti12.sh
-sh train_kitti15.sh
-```
-
-### Acknowledgements
-This repository makes liberal use of code from [[AutoDeeplab](https://openaccess.thecvf.com/content_CVPR_2019/html/Liu_Auto-DeepLab_Hierarchical_Neural_Architecture_Search_for_Semantic_Image_Segmentation_CVPR_2019_paper.html)]  [[pytorch code](https://github.com/NoamRosenberg/autodeeplab)(Non-official)]. 
-
-### Citing
-If you find this code useful, please consider to cite our work.
-
-```
-@article{cheng2020hierarchical,
-  title={Hierarchical Neural Architecture Search for Deep Stereo Matching},
-  author={Cheng, Xuelian and Zhong, Yiran and Harandi, Mehrtash and Dai, Yuchao and Chang, Xiaojun and Li, Hongdong and Drummond, Tom and Ge, Zongyuan},
-  journal={Advances in Neural Information Processing Systems},
-  volume={33},
-  year={2020}
-}
-```
-
+## Acknowledgements
+This repository makes liberal use of code from [Restormer] (https://github.com/swz30/Restormer).
