@@ -31,6 +31,11 @@ Ready the pretrain model
         └── pretrain
     ```
 
+If you want to watch the demo, you can run the command below on a RTX 3090.
+
+```bash
+python demo/predict.py
+```
 
 
 If you want to retrain the model, you can train the model by running the command below after setting the dataset path in ```dataloaders/__init__.py``` and config in ```train.sh```.
@@ -42,6 +47,7 @@ sh train.sh
 
 ## Training detail
 #### Stereo :
+   - With two NVIDIA RTX A4000
    - K12 batch_size=4 epoch=20 learn_rate=0.001
    - K15 batch_size=4 epoch=20 learn_rate=0.001
 
