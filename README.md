@@ -31,7 +31,7 @@ Ready the pretrain model
         └── pretrain
     ```
 
-If you want to watch the demo, you can run the command below on a RTX 3090.
+If you want to watch the demo, you can run the command below on a RTX 3090 GPU.
 
 ```bash
 python demo/predict.py
